@@ -1,10 +1,22 @@
 import { useEffect, useRef } from "react";
+import { getAgentFamily } from "@ai-workflow/shared";
 
 const AGENT_VISUALS = {
   planner: { color: "#66e0c2", accent: "#c7fff1", label: "기", prop: "board" },
-  coder: { color: "#5cb8ff", accent: "#d7f0ff", label: "개", prop: "laptop" },
-  tester: { color: "#ffca72", accent: "#fff0cc", label: "테", prop: "bug" },
-  reviewer: { color: "#95ea8d", accent: "#efffe6", label: "검", prop: "stamp" }
+  "coder-1": { color: "#5cb8ff", accent: "#d7f0ff", label: "1", prop: "board" },
+  "coder-2": { color: "#4d9ff0", accent: "#d7f0ff", label: "2", prop: "laptop" },
+  "coder-3": { color: "#7dc8ff", accent: "#d7f0ff", label: "3", prop: "wrench" },
+  "tester-1": { color: "#ffca72", accent: "#fff0cc", label: "테", prop: "bug" },
+  "reviewer-1": { color: "#95ea8d", accent: "#efffe6", label: "검", prop: "stamp" }
+};
+
+const AGENT_MOTION_PROFILES = {
+  planner: { bobSpeed: 210, walkSpeed: 130, stride: 2.2, drift: 0.8, linger: 2100 },
+  "coder-1": { bobSpeed: 170, walkSpeed: 86, stride: 4.8, drift: 2.6, linger: 1200 },
+  "coder-2": { bobSpeed: 150, walkSpeed: 70, stride: 3.2, drift: 1.2, linger: 1800 },
+  "coder-3": { bobSpeed: 190, walkSpeed: 108, stride: 5.4, drift: 3.4, linger: 980 },
+  "tester-1": { bobSpeed: 160, walkSpeed: 96, stride: 3.6, drift: 1.8, linger: 1300 },
+  "reviewer-1": { bobSpeed: 230, walkSpeed: 150, stride: 1.6, drift: 0.6, linger: 2400 }
 };
 
 const ROOM_LAYOUT = {
@@ -52,9 +64,11 @@ const ROOM_LAYOUT = {
 
 const HOME_LAYOUT = {
   planner: [126, 586],
-  coder: [308, 586],
-  tester: [522, 586],
-  reviewer: [740, 586]
+  "coder-1": [258, 586],
+  "coder-2": [382, 586],
+  "coder-3": [506, 586],
+  "tester-1": [650, 586],
+  "reviewer-1": [788, 586]
 };
 
 const ROOM_ACTION_SPOTS = {
@@ -63,6 +77,34 @@ const ROOM_ACTION_SPOTS = {
   "qa-lab": [[126, 392], [202, 392], [150, 448], [226, 448]],
   "incident-desk": [[448, 392], [524, 392], [476, 448], [540, 448]],
   "review-desk": [[716, 392], [788, 392], [742, 448], [804, 448]]
+};
+
+const AGENT_ROOM_PATHS = {
+  "coder-1": {
+    "build-bay": [0, 1, 3, 1, 0],
+    "briefing-room": [0, 2, 1],
+    "incident-desk": [0, 2, 1]
+  },
+  "coder-2": {
+    "build-bay": [2, 2, 1, 2, 3],
+    "briefing-room": [1, 3, 1],
+    "incident-desk": [1, 3, 2]
+  },
+  "coder-3": {
+    "build-bay": [3, 1, 0, 3, 2],
+    "qa-lab": [0, 1, 3, 2],
+    "incident-desk": [2, 3, 1, 0]
+  },
+  "tester-1": {
+    "qa-lab": [0, 2, 1, 3],
+    "incident-desk": [0, 2, 3]
+  },
+  "reviewer-1": {
+    "review-desk": [0, 0, 2, 0, 1]
+  },
+  planner: {
+    "briefing-room": [0, 1, 2, 1]
+  }
 };
 
 const EFFECT_BY_STATUS = {
@@ -294,14 +336,18 @@ function drawProp(ctx, type, x, y, accent) {
   } else if (type === "stamp") {
     roundedRect(ctx, x + 12, y, 12, 12, 4);
     ctx.fill();
+  } else if (type === "wrench") {
+    ctx.fillRect(x + 12, y + 2, 14, 4);
+    ctx.fillRect(x + 20, y - 2, 4, 14);
   }
 }
 
 function drawWorker(ctx, agent, x, y, tick) {
-  const visual = AGENT_VISUALS[agent.id];
+  const visual = AGENT_VISUALS[agent.id] ?? AGENT_VISUALS[getAgentFamily(agent.id)] ?? AGENT_VISUALS.planner;
+  const motion = AGENT_MOTION_PROFILES[agent.id] ?? AGENT_MOTION_PROFILES.planner;
   const active = agent.active;
-  const bob = active ? Math.sin(tick / 160) * 2 : Math.sin(tick / 260) * 1;
-  const walk = active ? Math.sin(tick / 90) * 4 : Math.sin(tick / 240) * 1.5;
+  const bob = active ? Math.sin(tick / motion.bobSpeed) * (1.6 + motion.drift * 0.2) : Math.sin(tick / (motion.bobSpeed + 80)) * 0.9;
+  const walk = active ? Math.sin(tick / motion.walkSpeed) * motion.stride : Math.sin(tick / (motion.walkSpeed + 120)) * (motion.stride * 0.28);
 
   ctx.fillStyle = "rgba(0,0,0,0.22)";
   ctx.beginPath();
@@ -412,22 +458,34 @@ export function OfficeSceneCanvas({ run, rooms }) {
         return base;
       }
 
+      const motion = AGENT_MOTION_PROFILES[agent.id] ?? AGENT_MOTION_PROFILES.planner;
+      const path = AGENT_ROOM_PATHS[agent.id]?.[agent.roomId];
+
       const agentAnimation = animationRef.current[agent.id] ?? {
         spotIndex: 0,
-        nextShiftAt: now + 1400
+        pathIndex: 0,
+        nextShiftAt: now + motion.linger
       };
 
       if (now >= agentAnimation.nextShiftAt && (agent.active || agent.status !== "idle")) {
-        agentAnimation.spotIndex = (agentAnimation.spotIndex + 1) % spots.length;
-        agentAnimation.nextShiftAt = now + 1400 + ((agent.id.charCodeAt(0) + spots.length) % 3) * 420;
+        if (path?.length) {
+          agentAnimation.pathIndex = (agentAnimation.pathIndex + 1) % path.length;
+          agentAnimation.spotIndex = path[agentAnimation.pathIndex] % spots.length;
+        } else {
+          agentAnimation.spotIndex = (agentAnimation.spotIndex + 1) % spots.length;
+        }
+        agentAnimation.nextShiftAt =
+          now + motion.linger + ((agent.id.charCodeAt(agent.id.length - 1) + spots.length) % 4) * 190;
       }
 
       animationRef.current[agent.id] = agentAnimation;
       const [spotX, spotY] = spots[agentAnimation.spotIndex] ?? [base.x, base.y];
+      const swayX = Math.sin((now + agent.id.length * 40) / (120 + motion.walkSpeed)) * motion.drift;
+      const swayY = Math.cos((now + agent.id.length * 55) / (140 + motion.bobSpeed)) * (motion.drift * 0.55);
 
       return {
-        x: base.x + (spotX - base.x) * 0.32,
-        y: base.y + (spotY - base.y) * 0.32
+        x: base.x + (spotX - base.x) * 0.32 + swayX,
+        y: base.y + (spotY - base.y) * 0.32 + swayY
       };
     }
 

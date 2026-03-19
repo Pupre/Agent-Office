@@ -1,11 +1,16 @@
 export const AGENTS = [
   { id: "planner", role: "기획자", description: "해야 할 일을 실행 가능한 단계로 쪼갭니다." },
-  { id: "coder", role: "개발자", description: "코드를 구현하고 수정 패치를 만듭니다." },
-  { id: "tester", role: "테스터", description: "동작을 검증하고 실패 원인을 보고합니다." },
-  { id: "reviewer", role: "리뷰어", description: "결과 품질을 확인하고 마무리 판단을 내립니다." }
+  { id: "coder-1", role: "개발자", description: "구조를 파악하고 작업 범위를 쪼갭니다." },
+  { id: "coder-2", role: "개발자", description: "핵심 구현과 패치 작성을 맡습니다." },
+  { id: "coder-3", role: "개발자", description: "환경 정비와 버그 대응을 담당합니다." },
+  { id: "tester-1", role: "테스터", description: "동작을 검증하고 실패 원인을 보고합니다." },
+  { id: "reviewer-1", role: "리뷰어", description: "결과 품질을 확인하고 마무리 판단을 내립니다." }
 ];
 
 export const AGENT_BY_ID = Object.fromEntries(AGENTS.map((agent) => [agent.id, agent]));
+export const AGENT_LABEL_BY_ID = Object.fromEntries(
+  AGENTS.map((agent) => [agent.id, `${agent.role}${agent.id.startsWith("coder-") ? ` ${agent.id.slice(-1)}` : ""}`])
+);
 
 export const ROOMS = [
   {
@@ -279,6 +284,19 @@ export function getAgentIndex(agentId) {
     0,
     AGENTS.findIndex((agent) => agent.id === agentId)
   );
+}
+
+export function getAgentFamily(agentId) {
+  if (agentId.startsWith("coder-")) {
+    return "coder";
+  }
+  if (agentId.startsWith("tester-")) {
+    return "tester";
+  }
+  if (agentId.startsWith("reviewer-")) {
+    return "reviewer";
+  }
+  return agentId;
 }
 
 export function getRoomIndex(roomId) {

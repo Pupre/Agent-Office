@@ -1,4 +1,4 @@
-import { STATUS_META } from "@ai-workflow/shared";
+import { AGENT_LABEL_BY_ID, STATUS_META } from "@ai-workflow/shared";
 
 const STAGE_LABELS = {
   planning: "기획",
@@ -8,13 +8,6 @@ const STAGE_LABELS = {
   retrying: "재시도",
   review: "리뷰",
   success: "완료"
-};
-
-const AGENT_LABELS = {
-  planner: "기획자",
-  coder: "개발자",
-  tester: "테스터",
-  reviewer: "리뷰어"
 };
 
 export function TimelinePanel({ run }) {
@@ -39,7 +32,7 @@ export function TimelinePanel({ run }) {
               </div>
               <p>{entry.summary}</p>
               <small>
-                {entry.attempt}차 · {AGENT_LABELS[entry.agentId] ?? entry.agentId} · {STAGE_LABELS[entry.stageId] ?? entry.stageId} ·{" "}
+                {entry.attempt}차 · {AGENT_LABEL_BY_ID[entry.agentId] ?? entry.agentId} · {STAGE_LABELS[entry.stageId] ?? entry.stageId} ·{" "}
                 {new Date(entry.timestamp).toLocaleTimeString()}
               </small>
             </div>

@@ -7,6 +7,11 @@ import {
   createWorkflowEvent
 } from "@ai-workflow/shared";
 
+const CODERS = ["coder-1", "coder-2", "coder-3"];
+const TESTERS = ["tester-1"];
+const REVIEWERS = ["reviewer-1"];
+const PLANNER = "planner";
+
 function shortText(value, max = 96) {
   if (!value) {
     return "";
@@ -31,100 +36,97 @@ function createTeamState(activeAgentIds, assignments, statuses) {
   };
 }
 
+function baseAssignments() {
+  return {
+    planner: "briefing-room",
+    "coder-1": "build-bay",
+    "coder-2": "build-bay",
+    "coder-3": "build-bay",
+    "tester-1": "qa-lab",
+    "reviewer-1": "review-desk"
+  };
+}
+
+function baseStatuses() {
+  return {
+    planner: "planning",
+    "coder-1": "waiting",
+    "coder-2": "waiting",
+    "coder-3": "waiting",
+    "tester-1": "waiting",
+    "reviewer-1": "waiting"
+  };
+}
+
 function getPlanningTeamState() {
-  return createTeamState(
-    ["planner", "coder", "tester", "reviewer"],
-    {
-      planner: "briefing-room",
-      coder: "briefing-room",
-      tester: "briefing-room",
-      reviewer: "briefing-room"
-    },
-    {
-      planner: "planning",
-      coder: "planning",
-      tester: "planning",
-      reviewer: "planning"
-    }
-  );
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  for (const agentId of [PLANNER, ...CODERS, ...TESTERS, ...REVIEWERS]) {
+    assignments[agentId] = "briefing-room";
+    statuses[agentId] = "planning";
+  }
+  return createTeamState([PLANNER, ...CODERS, ...TESTERS, ...REVIEWERS], assignments, statuses);
 }
 
 function getWorkTeamState(primaryStage = "coding") {
-  return createTeamState(
-    ["coder", "tester", "reviewer"],
-    {
-      planner: "briefing-room",
-      coder: "build-bay",
-      tester: "qa-lab",
-      reviewer: "review-desk"
-    },
-    {
-      planner: "planning",
-      coder: primaryStage === "testing" ? "coding" : primaryStage,
-      tester: "testing",
-      reviewer: "testing"
-    }
-  );
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  statuses["coder-1"] = "coding";
+  statuses["coder-2"] = primaryStage;
+  statuses["coder-3"] = "coding";
+  statuses["tester-1"] = "testing";
+  statuses["reviewer-1"] = "testing";
+  return createTeamState(["coder-1", "coder-2", "coder-3", "tester-1", "reviewer-1"], assignments, statuses);
 }
 
 function getReadTeamState() {
-  return createTeamState(
-    ["planner", "coder"],
-    {
-      planner: "briefing-room",
-      coder: "build-bay",
-      tester: "qa-lab",
-      reviewer: "review-desk"
-    },
-    {
-      planner: "planning",
-      coder: "coding",
-      tester: "waiting",
-      reviewer: "waiting"
-    }
-  );
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  assignments["coder-1"] = "briefing-room";
+  statuses["coder-1"] = "planning";
+  statuses["coder-2"] = "coding";
+  return createTeamState([PLANNER, "coder-1", "coder-2"], assignments, statuses);
 }
 
 function getIncidentTeamState() {
-  return createTeamState(
-    ["coder", "tester", "reviewer"],
-    {
-      planner: "briefing-room",
-      coder: "incident-desk",
-      tester: "incident-desk",
-      reviewer: "review-desk"
-    },
-    {
-      planner: "planning",
-      coder: "retrying",
-      tester: "failed",
-      reviewer: "testing"
-    }
-  );
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  assignments["coder-2"] = "incident-desk";
+  assignments["coder-3"] = "incident-desk";
+  assignments["tester-1"] = "incident-desk";
+  statuses["coder-1"] = "coding";
+  statuses["coder-2"] = "retrying";
+  statuses["coder-3"] = "retrying";
+  statuses["tester-1"] = "failed";
+  statuses["reviewer-1"] = "testing";
+  return createTeamState(["coder-1", "coder-2", "coder-3", "tester-1", "reviewer-1"], assignments, statuses);
 }
 
 function getReviewTeamState() {
-  return createTeamState(
-    ["reviewer", "tester"],
-    {
-      planner: "briefing-room",
-      coder: "build-bay",
-      tester: "qa-lab",
-      reviewer: "review-desk"
-    },
-    {
-      planner: "planning",
-      coder: "coding",
-      tester: "testing",
-      reviewer: "success"
-    }
-  );
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  statuses["coder-1"] = "coding";
+  statuses["coder-2"] = "coding";
+  statuses["tester-1"] = "testing";
+  statuses["reviewer-1"] = "success";
+  return createTeamState(["tester-1", "reviewer-1"], assignments, statuses);
+}
+
+function getBuildTeamState(focusCoderId) {
+  const assignments = baseAssignments();
+  const statuses = baseStatuses();
+  statuses["coder-1"] = focusCoderId === "coder-1" ? "coding" : "planning";
+  statuses["coder-2"] = focusCoderId === "coder-2" ? "coding" : "coding";
+  statuses["coder-3"] = focusCoderId === "coder-3" ? "retrying" : "planning";
+  statuses["tester-1"] = "testing";
+  statuses["reviewer-1"] = "testing";
+  return createTeamState(["coder-1", "coder-2", "coder-3", "tester-1", "reviewer-1"], assignments, statuses);
 }
 
 function detectToolAction(toolName, payload) {
   if (toolName.includes("apply_patch")) {
     return {
-      agentId: "coder",
+      agentId: "coder-2",
       roomId: "build-bay",
       stageId: "coding",
       status: "coding",
@@ -135,24 +137,32 @@ function detectToolAction(toolName, payload) {
 
   if (toolName.includes("playwright") || toolName.includes("browser_")) {
     return {
-      agentId: "tester",
+      agentId: "tester-1",
       roomId: "qa-lab",
       stageId: "testing",
       status: "testing",
       summary: "테스터가 브라우저 화면을 확인하고 있습니다.",
-      detail: shortText(JSON.stringify(payload), 180)
+      detail: shortText(JSON.stringify(payload), 180),
+      teamState: getWorkTeamState("testing"),
+      conversation: {
+        agentId: "reviewer-1",
+        roomId: "review-desk",
+        summary: "검증 화면이 바뀌는지 계속 같이 지켜보고 있습니다.",
+        detail: "리뷰어가 시각적 완성도와 흐름을 동시에 확인합니다."
+      }
     };
   }
 
   if (toolName.includes("search_openai_docs") || toolName.includes("fetch_openai_doc")) {
-    return {
-      agentId: "planner",
-      roomId: "briefing-room",
-      stageId: "planning",
-      status: "planning",
-      summary: "기획자가 공식 문서를 확인하고 있습니다.",
-      detail: shortText(JSON.stringify(payload), 180)
-    };
+      return {
+        agentId: "planner",
+        roomId: "briefing-room",
+        stageId: "planning",
+        status: "planning",
+        summary: "기획자가 공식 문서를 확인하고 있습니다.",
+        detail: shortText(JSON.stringify(payload), 180),
+        teamState: getReadTeamState()
+      };
   }
 
   if (toolName.includes("exec_command")) {
@@ -189,24 +199,36 @@ function detectToolAction(toolName, payload) {
         status: "planning",
         summary: `구조 파악 중: ${shortText(cmd, 64)}`,
         detail: cmd,
-        teamState: getReadTeamState()
+        teamState: getReadTeamState(),
+        conversation: {
+          agentId: "coder-1",
+          roomId: "briefing-room",
+          summary: "파일 구조를 보고 구현 분리를 제안합니다.",
+          detail: "개발자 1이 어떤 파일은 읽기 전용, 어떤 파일은 수정 대상으로 보이는지 공유합니다."
+        }
       };
     }
 
     if (isEdit) {
       return {
-        agentId: "coder",
+        agentId: "coder-2",
         roomId: "build-bay",
         stageId: "coding",
         status: "coding",
         summary: `코드 수정 중: ${shortText(cmd, 64)}`,
         detail: cmd,
-        teamState: getWorkTeamState("coding")
+        teamState: getBuildTeamState("coder-2"),
+        conversation: {
+          agentId: "coder-3",
+          roomId: "build-bay",
+          summary: "패치 들어갑니다. 나는 런타임 쪽 여파를 계속 볼게요.",
+          detail: "다른 개발자가 수정과 동시에 서버/환경 영향 범위를 살핍니다."
+        }
       };
     }
 
     return {
-      agentId: isTest ? "tester" : "coder",
+      agentId: isTest ? "tester-1" : isInfra ? "coder-3" : "coder-1",
       roomId: isTest ? "qa-lab" : isInfra ? "incident-desk" : "build-bay",
       stageId: isTest ? "testing" : isInfra ? "retrying" : "coding",
       status: isTest ? "testing" : isInfra ? "retrying" : "coding",
@@ -216,12 +238,32 @@ function detectToolAction(toolName, payload) {
         ? getWorkTeamState("testing")
         : isInfra
           ? getIncidentTeamState()
-          : getWorkTeamState("coding")
+          : getBuildTeamState("coder-1"),
+      conversation: isInfra
+        ? {
+            agentId: "tester-1",
+            roomId: "incident-desk",
+            summary: "장애 대응석으로 이동합니다. 재현 로그 같이 볼게요.",
+            detail: "테스터가 재현 경로와 실패 지점을 개발자에게 전달합니다."
+          }
+        : isTest
+          ? {
+              agentId: "coder-3",
+              roomId: "qa-lab",
+              summary: "테스트 결과 확인 중입니다. 깨지면 바로 버그룸으로 갑니다.",
+              detail: "환경 담당 개발자가 검증 결과를 옆에서 함께 지켜봅니다."
+            }
+          : {
+              agentId: "reviewer-1",
+              roomId: "review-desk",
+              summary: "구현 방향은 괜찮아요. 사용자 체감만 계속 보죠.",
+              detail: "리뷰어가 구현 중간에도 제품 감각을 계속 체크합니다."
+            }
     };
   }
 
   return {
-    agentId: "reviewer",
+    agentId: "reviewer-1",
     roomId: "review-desk",
     stageId: "review",
     status: "testing",
@@ -430,7 +472,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
       mirror.publisher.emit({
         kind: isFirstPrompt ? "run" : "discussion",
         type: isFirstPrompt ? EVENT_TYPES.RUN_CREATED : EVENT_TYPES.DISCUSSION_MESSAGE,
-        agentId: "planner",
+        agentId: PLANNER,
         roomId: "briefing-room",
         stageId: "planning",
         status: "planning",
@@ -486,7 +528,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "run",
           type: EVENT_TYPES.RUN_STARTED,
-          agentId: "planner",
+          agentId: PLANNER,
           roomId: "briefing-room",
           stageId: "planning",
           status: "planning",
@@ -499,7 +541,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "discussion",
           type: EVENT_TYPES.DISCUSSION_MESSAGE,
-          agentId: "planner",
+          agentId: PLANNER,
           roomId: "briefing-room",
           stageId: "planning",
           status: "planning",
@@ -515,7 +557,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "stage",
           type: EVENT_TYPES.STAGE_COMPLETED,
-          agentId: "tester",
+          agentId: "tester-1",
           roomId: "qa-lab",
           stageId: "testing",
           status: "testing",
@@ -528,7 +570,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "discussion",
           type: EVENT_TYPES.HANDOFF_COMPLETED,
-          agentId: "reviewer",
+          agentId: "reviewer-1",
           roomId: "review-desk",
           stageId: "review",
           status: "testing",
@@ -541,7 +583,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "run",
           type: EVENT_TYPES.RUN_COMPLETED,
-          agentId: "reviewer",
+          agentId: "reviewer-1",
           roomId: "review-desk",
           stageId: "success",
           status: "success",
@@ -574,6 +616,21 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
               ? getPlanningTeamState()
               : getWorkTeamState(action.stageId === "testing" ? "testing" : "coding"))
         });
+
+        if (action.conversation) {
+          mirror.publisher.emit({
+            kind: "discussion",
+            type: EVENT_TYPES.DISCUSSION_MESSAGE,
+            agentId: action.conversation.agentId,
+            roomId: action.conversation.roomId,
+            stageId: action.stageId,
+            status: action.status,
+            summary: action.conversation.summary,
+            detail: action.conversation.detail,
+            timestamp,
+            teamState: action.teamState
+          });
+        }
         continue;
       }
 
@@ -584,7 +641,7 @@ export function createCodexMirror({ eventBus, store, codexHome }) {
         mirror.publisher.emit({
           kind: "stage",
           type: EVENT_TYPES.ANALYSIS_RECORDED,
-          agentId: "tester",
+          agentId: "tester-1",
           roomId: "incident-desk",
           stageId: "failed",
           status: "failed",
