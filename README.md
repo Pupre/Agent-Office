@@ -1,90 +1,193 @@
 # Agent Office
 
-Event-driven MVP for visualizing an AI coding workflow as if a small agent team is collaborating in real time.
+Kairosoft-inspired office sim for visualizing an AI coding workflow in real time.
 
-## Folder structure
+Instead of a plain log viewer, this project turns workflow events into a live office scene where planners, developers, testers, and reviewers move through briefing rooms, build bays, QA labs, and incident desks.
+
+## What it does
+
+- React + canvas office scene with moving agent characters
+- real event-driven workflow rendering, not a fake animation loop
+- SSE-based live updates from the backend
+- Codex session mirroring for "show me the work happening right now"
+- mock orchestration path for demo runs
+- shared event schema so new adapters can plug in later
+
+## Workspace structure
 
 ```text
 agent-office/
 ├─ apps/
-│  ├─ server/   # orchestration loop, in-memory run store, SSE API
-│  └─ web/      # React dashboard consuming live workflow events
+│  ├─ server/      # event bus, in-memory run store, SSE API, Codex mirror
+│  └─ web/         # React app + canvas office scene
 ├─ packages/
-│  └─ shared/   # event schema, agent/stage metadata, reducer helpers
+│  └─ shared/      # event schema, agent metadata, reducer helpers
+├─ package.json    # npm workspace root
 └─ README.md
 ```
 
-## Event schema
+## Runtime requirements
 
-All runtime messages use the same envelope:
+Tested in this environment:
+
+- Node.js: `v24.13.0`
+- npm: `11.11.0`
+- Python: `3.9.16`
+
+Notes:
+
+- Python is not required for the app itself right now.
+- The project currently runs on Node.js ESM and Vite. Staying on a recent Node 20+ or Node 22+/24+ environment is the safe choice.
+
+## Install
+
+From the project root:
+
+```bash
+cd /home/muhyeon_shin/packages/ai-workflow-visualizer
+npm install
+```
+
+## Run locally
+
+Start the API/SSE server:
+
+```bash
+npm run start:server
+```
+
+Start the web app in another terminal:
+
+```bash
+npm run dev:web
+```
+
+Default local endpoints:
+
+- web: `http://127.0.0.1:5173`
+- server: `http://127.0.0.1:8787`
+
+If you want a production web build preview instead of Vite dev mode:
+
+```bash
+npm run build:web
+```
+
+## Main scripts
+
+- `npm run dev:web`
+- `npm run build:web`
+- `npm run dev:server`
+- `npm run start:server`
+
+## Current interaction modes
+
+### 1. Codex live mirror
+
+This mode mirrors the current Codex session into the office scene.
+
+Current implementation:
+
+- reads `~/.codex/history.jsonl`
+- reads `~/.codex/log/codex-tui.log`
+- interprets observable actions into planner / developer / tester / reviewer activity
+
+Important limitation:
+
+- this is not reading hidden internal reasoning
+- it visualizes observable work plus summarized role-level behavior
+
+### 2. Mock orchestration
+
+Useful for standalone demo runs when you want a fully scripted multi-step workflow.
+
+## API overview
+
+- `GET /health`
+- `GET /api/runs`
+- `GET /api/runs/current`
+- `POST /api/runs`
+- `GET /api/events`
+- `GET /api/mirrors/codex/state`
+- `GET /api/mirrors/codex/sessions`
+- `POST /api/mirrors/codex/latest`
+
+## Event model
+
+All runtime messages use the same shared event envelope from `packages/shared`.
 
 ```js
 {
   id: "evt_...",
-  runId: "run_...",
-  sequence: 7,
+  runId: "codex_...",
+  sequence: 42,
   timestamp: "2026-03-19T12:34:56.000Z",
-  kind: "run" | "stage" | "agent" | "log",
-  type: "run.created" | "stage.started" | "stage.failed" | ...,
+  kind: "run" | "stage" | "discussion" | "log",
+  type: "run.started" | "discussion.message" | "log.appended" | ...,
   task: {
-    id: "task_primary",
-    title: "Implement live event pipeline"
+    id: "task_codex_live",
+    title: "실시간 Codex 세션 019d0484"
   },
   stage: {
     id: "testing",
     status: "testing",
     attempt: 1,
-    index: 2
+    index: 7
   },
   agent: {
-    id: "tester",
-    role: "Tester"
+    id: "coder-2",
+    role: "개발자"
   },
   payload: {
-    summary: "Tests failed on websocket reconnect edge case",
-    nextStageId: "coding"
+    summary: "검증 명령 실행: npm run build:web",
+    detail: "npm run build:web",
+    teamState: {
+      activeAgentIds: ["coder-1", "coder-2", "tester-1"],
+      assignments: {
+        "coder-1": "build-bay",
+        "coder-2": "qa-lab"
+      },
+      statuses: {
+        "coder-1": "coding",
+        "coder-2": "testing"
+      }
+    }
   }
 }
 ```
 
-The `packages/shared` module owns:
+## Housekeeping before continuing at home
 
-- canonical agent definitions
-- workflow status values
-- event type constants
-- reducer logic that converts an event stream into a run snapshot
+Recommended flow:
 
-This keeps the backend and frontend synchronized without duplicating state rules.
+```bash
+cd /home/muhyeon_shin/packages/ai-workflow-visualizer
+git pull
+npm install
+npm run start:server
+npm run dev:web
+```
 
-## Data flow
+If dependencies are already installed, `npm install` can be skipped.
 
-1. `POST /api/runs` creates a new run and starts the orchestrator.
-2. The orchestrator emits structured events at each stage transition.
-3. The event bus fans those events out to:
-   - the in-memory run store
-   - connected SSE clients on `/api/events`
-4. The React app:
-   - fetches the run list from `/api/runs`
-   - opens an `EventSource` connection
-   - incrementally applies incoming events to render agent cards, task movement, the timeline, and run queue updates
+## Git remote
 
-Because the UI is driven by the same event contract a real executor would use, the mock loop can later be replaced with actual LLM/tool calls without changing the rendering model.
+Current remote:
 
-## MVP scope in this commit
+```bash
+https://github.com/Pupre/Agent-Office.git
+```
 
-- in-memory orchestration loop with retry path
-- pluggable executor contract so mock logic can be replaced by real workers
-- multi-run in-memory store with list and detail APIs
-- SSE event streaming
-- React dashboard with live agent board, moving task indicator, run queue, logs, and timeline
-- shared event contract for future replacement with real executors
+If you need to push manually:
 
-## Executors
+```bash
+cd /home/muhyeon_shin/packages/ai-workflow-visualizer
+git push origin main
+```
 
-- `mock`: emits a full collaborative loop with planning discussion, coding handoff, QA failure, root-cause analysis, retry, and review.
-- `openai`: uses the OpenAI `POST /v1/responses` API shape as the integration point for a real model-backed planner pass.
+## Next likely improvements
 
-Environment variables for the OpenAI executor:
-
-- `OPENAI_API_KEY`
-- `AI_WORKFLOW_MODEL` default: `gpt-5.4`
+- richer worker personalities and pair dynamics
+- better speech bubble prioritization
+- more native multi-agent adapters beyond Codex
+- tighter mapping from real tool actions to office behaviors

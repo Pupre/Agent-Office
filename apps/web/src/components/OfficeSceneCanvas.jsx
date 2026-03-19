@@ -342,12 +342,80 @@ function drawProp(ctx, type, x, y, accent) {
   }
 }
 
+function drawSeatedWorker(ctx, agent, x, y, tick) {
+  const visual = AGENT_VISUALS[agent.id] ?? AGENT_VISUALS[getAgentFamily(agent.id)] ?? AGENT_VISUALS.planner;
+  const sway = Math.sin(tick / 220) * 0.9;
+
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 22, 18, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#576b76";
+  roundedRect(ctx, x - 16, y + 4, 32, 10, 5);
+  ctx.fill();
+  roundedRect(ctx, x - 6, y - 10, 12, 20, 5);
+  ctx.fill();
+
+  ctx.fillStyle = "#25343d";
+  roundedRect(ctx, x - 12, y + 8, 10, 10, 4);
+  ctx.fill();
+  roundedRect(ctx, x + 2, y + 8, 10, 10, 4);
+  ctx.fill();
+
+  ctx.fillStyle = visual.color;
+  roundedRect(ctx, x - 14, y - 8 + sway, 28, 18, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#f2d2bc";
+  ctx.beginPath();
+  ctx.arc(x, y - 16 + sway, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#2e2320";
+  roundedRect(ctx, x - 10, y - 26 + sway, 20, 8, 4);
+  ctx.fill();
+
+  drawProp(ctx, visual.prop, x + 4, y - 6 + sway, visual.accent);
+
+  ctx.fillStyle = "#0b1419";
+  roundedRect(ctx, x - 12, y - 46, 24, 14, 7);
+  ctx.fill();
+  ctx.fillStyle = "#edf8f5";
+  ctx.font = "700 9px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(visual.label, x, y - 36);
+  ctx.textAlign = "left";
+}
+
 function drawWorker(ctx, agent, x, y, tick) {
   const visual = AGENT_VISUALS[agent.id] ?? AGENT_VISUALS[getAgentFamily(agent.id)] ?? AGENT_VISUALS.planner;
   const motion = AGENT_MOTION_PROFILES[agent.id] ?? AGENT_MOTION_PROFILES.planner;
   const active = agent.active;
   const bob = active ? Math.sin(tick / motion.bobSpeed) * (1.6 + motion.drift * 0.2) : Math.sin(tick / (motion.bobSpeed + 80)) * 0.9;
   const walk = active ? Math.sin(tick / motion.walkSpeed) * motion.stride : Math.sin(tick / (motion.walkSpeed + 120)) * (motion.stride * 0.28);
+  const isSeatedCoder =
+    agent.id.startsWith("coder-") &&
+    agent.roomId === "build-bay" &&
+    (agent.status === "coding" || agent.status === "planning");
+
+  if (isSeatedCoder) {
+    drawSeatedWorker(ctx, agent, x, y, tick);
+
+    if (active || agent.status === "coding" || agent.status === "testing" || agent.status === "retrying") {
+      drawEffect(ctx, agent.status, x, y, tick);
+    }
+
+    ctx.fillStyle = "#1a262c";
+    roundedRect(ctx, x - 18, y + 36, 36, 12, 6);
+    ctx.fill();
+    ctx.fillStyle = "#edf8f5";
+    ctx.font = "700 9px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(agent.role, x, y + 45);
+    ctx.textAlign = "left";
+    return;
+  }
 
   ctx.fillStyle = "rgba(0,0,0,0.22)";
   ctx.beginPath();
@@ -417,6 +485,63 @@ function drawHud(ctx, run) {
   ctx.textAlign = "left";
 }
 
+function trimBubbleText(text, max = 28) {
+  if (!text) {
+    return "";
+  }
+
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function getSpeechBubbleLayout(ctx, text, x, y) {
+  const bubbleText = trimBubbleText(text);
+  ctx.font = "700 11px sans-serif";
+  const textWidth = ctx.measureText(bubbleText).width;
+  const width = Math.min(170, Math.max(72, textWidth + 20));
+  const height = 32;
+  return {
+    bubbleText,
+    width,
+    height,
+    bubbleX: x - width / 2,
+    bubbleY: y - 94
+  };
+}
+
+function drawSpeechBubble(ctx, text, x, y, tone = "#f7f6ee", offsetX = 0, offsetY = 0) {
+  if (!text) {
+    return;
+  }
+
+  const { bubbleText, width, height } = getSpeechBubbleLayout(ctx, text, x, y);
+  const bubbleX = x - width / 2 + offsetX;
+  const bubbleY = y - 94 + offsetY;
+
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  roundedRect(ctx, bubbleX + 3, bubbleY + 4, width, height, 11);
+  ctx.fill();
+
+  ctx.fillStyle = tone;
+  roundedRect(ctx, bubbleX, bubbleY, width, height, 11);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 7, bubbleY + height - 1);
+  ctx.lineTo(x + 2, bubbleY + height + 10);
+  ctx.lineTo(x + 10, bubbleY + height - 1);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(42,52,59,0.22)";
+  ctx.lineWidth = 1;
+  roundedRect(ctx, bubbleX, bubbleY, width, height, 11);
+  ctx.stroke();
+
+  ctx.fillStyle = "#233038";
+  ctx.textAlign = "center";
+  ctx.fillText(bubbleText, x, bubbleY + 20);
+  ctx.textAlign = "left";
+}
+
 export function OfficeSceneCanvas({ run, rooms }) {
   const canvasRef = useRef(null);
   const positionsRef = useRef({});
@@ -437,6 +562,11 @@ export function OfficeSceneCanvas({ run, rooms }) {
       if (occupancy[agent.roomId]) {
         occupancy[agent.roomId].push(agent.id);
       }
+    }
+
+    const latestDiscussionByAgent = new Map();
+    for (const entry of [...run.discussion].slice(-12)) {
+      latestDiscussionByAgent.set(entry.agentId, entry.summary);
     }
 
     function targetPosition(agent) {
@@ -507,6 +637,7 @@ export function OfficeSceneCanvas({ run, rooms }) {
         drawRoom(ctx, room, ROOM_LAYOUT[room.id], run.currentRoomId === room.id, tick);
       }
 
+      const bubbleEntries = [];
       for (const agent of run.agentStatuses) {
         const target = animatedTarget(agent, now);
         const current = positionsRef.current[agent.id] ?? target;
@@ -516,6 +647,64 @@ export function OfficeSceneCanvas({ run, rooms }) {
         };
         positionsRef.current[agent.id] = next;
         drawWorker(ctx, agent, next.x, next.y, tick);
+        const bubbleText =
+          latestDiscussionByAgent.get(agent.id) ??
+          (agent.active ? `${agent.role} ${STATUS_LABELS[agent.status] ?? agent.status}` : "");
+        if (bubbleText && (agent.active || latestDiscussionByAgent.has(agent.id))) {
+          const layout = getSpeechBubbleLayout(ctx, bubbleText, next.x, next.y);
+          bubbleEntries.push({
+            agentId: agent.id,
+            text: bubbleText,
+            x: next.x,
+            y: next.y,
+            tone: AGENT_VISUALS[agent.id]?.accent ?? "#f7f6ee",
+            width: layout.width,
+            height: layout.height,
+            offsetX: 0,
+            offsetY: 0
+          });
+        }
+      }
+
+      const sortedBubbles = [...bubbleEntries].sort((left, right) => left.y - right.y);
+      for (let index = 0; index < sortedBubbles.length; index += 1) {
+        const currentBubble = sortedBubbles[index];
+        for (let compareIndex = 0; compareIndex < index; compareIndex += 1) {
+          const previousBubble = sortedBubbles[compareIndex];
+          const currentX = currentBubble.x - currentBubble.width / 2 + currentBubble.offsetX;
+          const currentY = currentBubble.y - 94 + currentBubble.offsetY;
+          const previousX = previousBubble.x - previousBubble.width / 2 + previousBubble.offsetX;
+          const previousY = previousBubble.y - 94 + previousBubble.offsetY;
+          const overlapsX =
+            currentX < previousX + previousBubble.width + 8 &&
+            currentX + currentBubble.width + 8 > previousX;
+          const overlapsY =
+            currentY < previousY + previousBubble.height + 8 &&
+            currentY + currentBubble.height + 8 > previousY;
+
+          if (overlapsX && overlapsY) {
+            currentBubble.offsetY -= previousBubble.height + 16;
+            currentBubble.offsetX += currentBubble.x <= previousBubble.x ? -18 : 18;
+          }
+        }
+
+        currentBubble.offsetX = Math.max(
+          -currentBubble.x + currentBubble.width / 2 + 8,
+          Math.min(currentBubble.offsetX, 900 - (currentBubble.x + currentBubble.width / 2) - 8)
+        );
+        currentBubble.offsetY = Math.max(currentBubble.offsetY, -120);
+      }
+
+      for (const bubble of sortedBubbles) {
+        drawSpeechBubble(
+          ctx,
+          bubble.text,
+          bubble.x,
+          bubble.y,
+          bubble.tone,
+          bubble.offsetX,
+          bubble.offsetY
+        );
       }
 
       frameId = requestAnimationFrame(draw);
