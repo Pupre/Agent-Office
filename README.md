@@ -48,6 +48,53 @@ cd /home/muhyeon_shin/packages/ai-workflow-visualizer
 npm install
 ```
 
+## Windows setup
+
+Recommended installs on Windows:
+
+- Git for Windows
+- Node.js 22+ or 24+
+- npm comes with Node.js
+- VS Code optional
+
+Links:
+
+- Git for Windows: `https://git-scm.com/download/win`
+- Node.js: `https://nodejs.org/`
+- VS Code: `https://code.visualstudio.com/`
+
+PowerShell setup flow:
+
+```powershell
+git clone https://github.com/Pupre/Agent-Office.git
+cd Agent-Office
+npm install
+```
+
+Run the server in one PowerShell window:
+
+```powershell
+npm run start:server
+```
+
+Run the web app in another PowerShell window:
+
+```powershell
+npm run dev:web
+```
+
+Open:
+
+- web: `http://127.0.0.1:5173`
+- server: `http://127.0.0.1:8787`
+
+Notes for Windows:
+
+- Python is not required for the current app flow.
+- If `npm` is not recognized, reopen PowerShell after installing Node.js.
+- If port `8787` or `5173` is already in use, close the existing process first.
+- The live Codex mirror only works if the Codex log/history files exist on that Windows machine too.
+
 ## Run locally
 
 Start the API/SSE server:
