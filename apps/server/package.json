@@ -1,0 +1,13 @@
+{
+  "name": "@ai-workflow/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@ai-workflow/shared": "0.1.0"
+  }
+}
